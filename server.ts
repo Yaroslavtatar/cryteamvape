@@ -359,6 +359,12 @@ app.patch('/api/admin/orders/:id', authenticate, isAdmin, (req, res) => {
   res.json({ success: true });
 });
 
+app.patch('/api/admin/products/:id/stock', authenticate, isAdmin, (req, res) => {
+  const { stock } = req.body;
+  db.prepare('UPDATE products SET stock = ? WHERE id = ?').run(stock, req.params.id);
+  res.json({ success: true });
+});
+
 // Settings Management
 app.get('/api/settings', (req, res) => {
   const settings = db.prepare('SELECT * FROM settings').all() as { key: string, value: string }[];

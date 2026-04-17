@@ -11,6 +11,7 @@ import {
   Trash2, 
   Package, 
   TrendingUp,
+  Minus,
   LogOut,
   Menu,
   X,
@@ -295,15 +296,15 @@ const HorizontalScroll = ({ children, className = "" }: { children: React.ReactN
     <div className={cn("relative group", className)}>
       <AnimatePresence>
         {showLeft && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            onClick={() => scroll('left')}
-            className="absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-12 h-12 bg-black/80 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--color-portal-green)] hover:text-black transition-all hover:scale-110 shadow-xl shadow-black/50"
-          >
-            <ChevronLeft size={20} className="sm:size-24" />
-          </motion.button>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              onClick={() => scroll('left')}
+              className="absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-14 sm:h-14 bg-black/80 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--color-portal-green)] hover:text-black transition-all hover:scale-110 shadow-xl shadow-black/50"
+            >
+              <ChevronLeft size={24} />
+            </motion.button>
         )}
       </AnimatePresence>
       <div 
@@ -315,15 +316,15 @@ const HorizontalScroll = ({ children, className = "" }: { children: React.ReactN
       </div>
       <AnimatePresence>
         {showRight && (
-          <motion.button
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            onClick={() => scroll('right')}
-            className="absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-12 h-12 bg-black/80 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--color-portal-green)] hover:text-black transition-all hover:scale-110 shadow-xl shadow-black/50"
-          >
-            <ChevronRight size={20} className="sm:size-24" />
-          </motion.button>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              onClick={() => scroll('right')}
+              className="absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-14 sm:h-14 bg-black/80 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--color-portal-green)] hover:text-black transition-all hover:scale-110 shadow-xl shadow-black/50"
+            >
+              <ChevronRight size={24} />
+            </motion.button>
         )}
       </AnimatePresence>
     </div>
@@ -391,6 +392,34 @@ const ScrollToTop = () => {
   );
 };
 
+const StockInput = ({ initialStock, onUpdate }: { initialStock: number, onUpdate: (val: number) => void }) => {
+  const [val, setVal] = useState<string>(initialStock.toString());
+  
+  useEffect(() => {
+    setVal(initialStock.toString());
+  }, [initialStock]);
+
+  return (
+    <input 
+      type="number" 
+      value={val}
+      onFocus={(e) => {
+        e.target.select();
+        if (val === "0") setVal("");
+      }}
+      onBlur={() => {
+        if (val === "") {
+          setVal(initialStock.toString());
+        } else {
+          const num = parseInt(val);
+          if (!isNaN(num)) onUpdate(num);
+        }
+      }}
+      onChange={(e) => setVal(e.target.value)}
+      className="w-12 bg-transparent text-center text-sm font-black focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-[var(--color-portal-green)]"
+    />
+  );
+};
 interface ProductCardProps {
   product: Product;
   isFavorite: boolean;
@@ -1541,6 +1570,18 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
   const [flavorFilter, setFlavorFilter] = useState<string>('all');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({
+    name: '',
+    description: '',
+    category_id: 1,
+    image_url: '',
+    nicotine: '',
+    volume: '',
+    flavor: '',
+    is_sale: false,
+    is_used: false
+  });
   const navigate = useNavigate();
 
   const getDeliveryLabel = (method: string) => {
@@ -1563,6 +1604,51 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
       body: JSON.stringify({ status: newStatus })
     }).then(() => {
       setOrders(orders.map(o => o.id === id ? { ...o, status: newStatus } : o));
+    });
+  };
+
+  const updateProductStock = (id: number, newStock: number) => {
+    if (newStock < 0) return;
+    fetch(`/api/admin/products/${id}/stock`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stock: newStock })
+    }).then(() => {
+      setProducts(products.map(p => p.id === id ? { ...p, stock: newStock } : p));
+    });
+  };
+
+  const handleCreateProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetch('/api/admin/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newProduct)
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.id) {
+        const category = categories.find(c => c.id === Number(newProduct.category_id));
+        const createdProduct: Product = {
+          ...newProduct as Product,
+          id: data.id,
+          category_name: category?.name || ''
+        };
+        setProducts([createdProduct, ...products]);
+        setShowCreateModal(false);
+        setNewProduct({
+          name: '',
+          description: '',
+          category_id: 1,
+          image_url: '',
+          nicotine: '',
+          volume: '',
+          flavor: '',
+          is_sale: false,
+          is_used: false
+        });
+        alert('Товар успешно добавлен!');
+      }
     });
   };
 
@@ -1601,37 +1687,39 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 sm:py-10 space-y-8 sm:space-y-10 overflow-hidden">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter uppercase leading-tight shrink-0">АДМИН <span className="text-[var(--color-portal-green)]">ПАНЕЛЬ</span></h1>
-        <HorizontalScroll className="bg-white/10 p-1.5 rounded-2xl border border-white/5 -mx-4 sm:mx-0">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-white/5 pb-8">
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase leading-tight shrink-0 italic">
+          АДМИН <span className="text-[var(--color-portal-green)] outline-glow">ПАНЕЛЬ</span>
+        </h1>
+        <div className="flex bg-white/5 p-1.5 rounded-[22px] border border-white/10 overflow-x-auto scrollbar-hide">
           {[
-            { id: 'stats', label: 'Статистика', icon: <TrendingUp size={14}/> },
+            { id: 'stats', label: 'Данные', icon: <TrendingUp size={14}/> },
             { id: 'orders', label: 'Заказы', icon: <Package size={14}/> },
-            { id: 'products', label: 'Товары', icon: <Settings size={14}/> },
+            { id: 'products', label: 'Склад', icon: <Settings size={14}/> },
             { id: 'users', label: 'Клиенты', icon: <User size={14}/> },
             { id: 'payments', label: 'Платежи', icon: <CreditCard size={14}/> }
           ].map(tab => (
             <button 
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className="relative px-5 py-2.5 rounded-xl text-[10px] font-black transition-all flex items-center gap-2 uppercase tracking-widest text-nowrap group shrink-0"
+              className="relative px-6 py-3 rounded-2xl text-[10px] font-black transition-all flex items-center gap-2 uppercase tracking-[0.2em] text-nowrap group shrink-0"
             >
               {activeTab === tab.id && (
                 <motion.div 
                   layoutId="active-admin-tab"
-                  className="absolute inset-0 bg-[var(--color-portal-green)] rounded-xl z-0"
+                  className="absolute inset-0 bg-[var(--color-portal-green)] rounded-2xl z-0 shadow-[0_0_20px_rgba(68,255,0,0.3)]"
                   transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                 />
               )}
               <span className={cn(
                 "relative z-10 flex items-center gap-2",
-                activeTab === tab.id ? "text-black" : "text-white/40 group-hover:text-white"
+                activeTab === tab.id ? "text-black" : "text-white/30 group-hover:text-white group-hover:bg-white/5"
               )}>
                 {tab.icon} {tab.label}
               </span>
             </button>
           ))}
-        </HorizontalScroll>
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -1755,11 +1843,203 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                 <motion.button 
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowCreateModal(true)}
                   className="flex items-center gap-2 bg-[var(--color-portal-green)] text-black px-8 py-5 rounded-2xl font-black hover:bg-[var(--color-acid-green)] transition-all uppercase tracking-widest text-xs w-full lg:w-auto shadow-xl shadow-[var(--color-portal-green)]/20"
                 >
                   <Plus size={22} /> Добавить товар
                 </motion.button>
               </div>
+              
+              <AnimatePresence>
+                {showCreateModal && (
+                  <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl">
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95, y: 40 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 40 }}
+                      className="glass w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6 sm:p-8 space-y-6 relative border-white/10"
+                    >
+                      <button 
+                        onClick={() => setShowCreateModal(false)}
+                        className="absolute top-6 right-6 p-3 hover:bg-white/5 rounded-full transition-all text-white/30 hover:text-white"
+                      >
+                        <X size={24} />
+                      </button>
+
+                      <div className="space-y-1">
+                        <h2 className="text-3xl font-black uppercase tracking-tighter italic">
+                          НОВЫЙ <span className="text-[var(--color-portal-green)]">ТОВАР</span>
+                        </h2>
+                        <div className="h-1 w-12 bg-[var(--color-portal-green)] rounded-full" />
+                      </div>
+
+                      <form onSubmit={handleCreateProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Название</label>
+                          <input 
+                            required
+                            type="text" 
+                            value={newProduct.name}
+                            onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-md font-bold focus:outline-none focus:border-[var(--color-portal-green)] transition-all placeholder:text-white/10 text-white"
+                            placeholder="Название товара..."
+                          />
+                        </div>
+
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Описание</label>
+                          <textarea 
+                            value={newProduct.description}
+                            onChange={(e) => setNewProduct({...newProduct, description: e.target.value})}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-sm focus:outline-none focus:border-[var(--color-portal-green)] transition-all placeholder:text-white/10 text-white/80 min-h-[100px] resize-none"
+                            placeholder="Описание характеристик..."
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Категория</label>
+                          <div className="relative">
+                            <select 
+                              value={newProduct.category_id}
+                              onChange={(e) => setNewProduct({...newProduct, category_id: Number(e.target.value)})}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs font-bold focus:outline-none focus:border-[var(--color-portal-green)] transition-all appearance-none cursor-pointer"
+                            >
+                              {categories.map(c => (
+                                <option key={c.id} value={c.id} className="bg-[#0f0f0f] text-white">{c.name}</option>
+                              ))}
+                            </select>
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/20" size={14} />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Цена</label>
+                            <input 
+                              required
+                              type="number" 
+                              value={newProduct.price === undefined ? "" : newProduct.price}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewProduct({...newProduct, price: val === "" ? undefined : Number(val)});
+                              }}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs font-black focus:outline-none focus:border-[var(--color-portal-green)] transition-all"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Склад</label>
+                            <input 
+                              required
+                              type="number" 
+                              value={newProduct.stock === undefined ? "" : newProduct.stock}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewProduct({...newProduct, stock: val === "" ? undefined : Number(val)});
+                              }}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs font-black focus:outline-none focus:border-[var(--color-portal-green)] transition-all"
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Вкус</label>
+                          <input 
+                            type="text" 
+                            value={newProduct.flavor}
+                            onChange={(e) => setNewProduct({...newProduct, flavor: e.target.value})}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs font-bold focus:outline-none focus:border-[var(--color-portal-green)] transition-all"
+                            placeholder="Мята..."
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Никотин</label>
+                            <input 
+                              type="text" 
+                              value={newProduct.nicotine}
+                              onChange={(e) => setNewProduct({...newProduct, nicotine: e.target.value})}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs font-bold focus:outline-none focus:border-[var(--color-portal-green)] transition-all"
+                              placeholder="20mg"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Объем</label>
+                            <input 
+                              type="text" 
+                              value={newProduct.volume}
+                              onChange={(e) => setNewProduct({...newProduct, volume: e.target.value})}
+                              className="w-full bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs font-bold focus:outline-none focus:border-[var(--color-portal-green)] transition-all"
+                              placeholder="30ml"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Картинка (URL)</label>
+                          <div className="flex gap-3">
+                            <input 
+                              type="url" 
+                              value={newProduct.image_url}
+                              onChange={(e) => setNewProduct({...newProduct, image_url: e.target.value})}
+                              className="flex-1 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:border-[var(--color-portal-green)] transition-all"
+                              placeholder="https://..."
+                            />
+                            <div className="w-12 h-12 rounded-xl border border-white/10 bg-black/40 overflow-hidden flex items-center justify-center">
+                              {newProduct.image_url ? (
+                                <img src={newProduct.image_url} alt="Preview" className="w-full h-full object-cover" />
+                              ) : (
+                                <Droplets size={16} className="text-white/10" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="md:col-span-2 flex gap-6 pt-2 px-1">
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <div 
+                              onClick={() => setNewProduct({...newProduct, is_sale: !newProduct.is_sale})}
+                              className={cn(
+                                "w-5 h-5 rounded-md border transition-all flex items-center justify-center",
+                                newProduct.is_sale ? "bg-red-500 border-red-500" : "border-white/10"
+                              )}
+                            >
+                              {newProduct.is_sale && <Check size={14} className="text-white" />}
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white">SALE</span>
+                          </label>
+
+                          <label className="flex items-center gap-2 cursor-pointer group">
+                            <div 
+                              onClick={() => setNewProduct({...newProduct, is_used: !newProduct.is_used})}
+                              className={cn(
+                                "w-5 h-5 rounded-md border transition-all flex items-center justify-center",
+                                newProduct.is_used ? "bg-yellow-500 border-yellow-500" : "border-white/10"
+                              )}
+                            >
+                              {newProduct.is_used && <Check size={14} className="text-white" />}
+                            </div>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-white">Б/У</span>
+                          </label>
+                        </div>
+
+                        <div className="md:col-span-2 pt-4">
+                          <button 
+                            type="submit"
+                            className="w-full py-4 bg-[var(--color-portal-green)] text-black font-black text-lg rounded-2xl hover:bg-[var(--color-acid-green)] transition-all uppercase tracking-widest"
+                          >
+                            ДОБАВИТЬ ТОВАР
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  </div>
+                )}
+              </AnimatePresence>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <AnimatePresence mode="popLayout">
                   {products
@@ -1792,7 +2072,27 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                           )} />
                           <div className="font-bold truncate text-lg leading-none uppercase italic italic-small">{p.name}</div>
                         </div>
-                        <div className="text-white/30 text-[10px] font-bold uppercase tracking-widest">{p.price} ₽ • Склад: {p.stock}</div>
+                        <div className="flex items-center gap-4 mt-1">
+                          <div className="text-white/30 text-[10px] font-bold uppercase tracking-widest">{p.price} ₽</div>
+                          <div className="flex items-center bg-white/5 rounded-xl border border-white/10 p-1.5 gap-1 group/stock">
+                            <button 
+                              onClick={() => updateProductStock(p.id, p.stock - 1)}
+                              className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/20 hover:text-red-500"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <StockInput 
+                              initialStock={p.stock}
+                              onUpdate={(val) => updateProductStock(p.id, val)}
+                            />
+                            <button 
+                              onClick={() => updateProductStock(p.id, p.stock + 1)}
+                              className="w-8 h-8 flex items-center justify-center hover:bg-white/10 rounded-lg transition-colors text-white/20 hover:text-[var(--color-portal-green)]"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                       <button className="p-3 text-white/20 hover:text-red-500 transition-colors">
                         <Trash2 size={24} />
