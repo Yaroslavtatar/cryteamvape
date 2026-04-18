@@ -155,6 +155,7 @@ interface AppSettings {
   yookassa_api_key?: string;
   ton_payment_enabled?: boolean;
   ton_wallet_address?: string;
+  telegram_bot_username?: string;
 }
 
 const Navbar = ({ user, cartCount, favoritesCount, tonEnabled }: { user: User | null, cartCount: number, favoritesCount: number, tonEnabled: boolean }) => {
@@ -164,8 +165,10 @@ const Navbar = ({ user, cartCount, favoritesCount, tonEnabled }: { user: User | 
     <nav className="sticky top-0 z-50 glass border-b border-[var(--color-glass-border)] h-20 flex items-center">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
         <div className="flex justify-between items-center">
-          <Link to="/" className="flex items-center gap-2 group shrink-0">
-            <span className="text-xl sm:text-2xl font-black tracking-widest text-[var(--color-portal-green)] uppercase">BARAHOLKA <span className="text-white">SHOP</span></span>
+          <Link to="/" className="flex items-center group shrink-0">
+            <span className="text-lg sm:text-2xl font-black tracking-widest text-[var(--color-portal-green)] uppercase">
+              BARAHOLKA<span className="hidden sm:inline text-white"> SHOP</span>
+            </span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
@@ -196,16 +199,16 @@ const Navbar = ({ user, cartCount, favoritesCount, tonEnabled }: { user: User | 
               )}
             </Link>
             {user ? (
-              <Link to="/profile" className="flex items-center gap-2 sm:gap-3 bg-white/5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full border border-white/5 hover:border-[var(--color-portal-green)] transition-all max-w-[100px] sm:max-w-none">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full overflow-hidden bg-[var(--color-portal-green)] flex items-center justify-center font-bold text-black shrink-0 text-sm">
+              <Link to="/profile" className="flex items-center justify-center bg-white/5 px-2 py-2 sm:px-4 sm:py-2 rounded-full border border-white/5 hover:border-[var(--color-portal-green)] transition-all shrink-0">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full overflow-hidden bg-[var(--color-portal-green)] flex items-center justify-center font-bold text-black text-xs sm:text-sm shrink-0">
                   {user.first_name[0]}
                 </div>
-                <div className="hidden sm:block truncate">
+                <div className="hidden md:block truncate ml-2">
                   <div className="text-[10px] font-bold leading-none truncate">{user.username || user.first_name}</div>
                 </div>
               </Link>
             ) : (
-              <Link to="/login" className="text-[10px] sm:text-xs font-bold bg-[var(--color-portal-green)] text-black px-4 sm:px-6 py-2 rounded-full hover:scale-105 transition-transform uppercase tracking-widest shadow-lg shadow-[var(--color-portal-green)]/20">
+              <Link to="/login" className="text-[10px] sm:text-xs font-bold bg-[var(--color-portal-green)] text-black px-4 sm:px-6 py-2 rounded-full hover:scale-105 transition-transform uppercase tracking-widest shadow-lg shadow-[var(--color-portal-green)]/20 shrink-0">
                 ВХОД
               </Link>
             )}
@@ -231,13 +234,11 @@ const Navbar = ({ user, cartCount, favoritesCount, tonEnabled }: { user: User | 
             >
               <X size={32} />
             </button>
-            <div className="flex flex-col items-center gap-10">
+            <div className="flex flex-col items-center gap-6 sm:gap-10">
               {[
                 { label: 'Каталог', path: '/catalog' },
-                { label: 'Избранное', path: '/favorites' },
                 { label: 'Скидки', path: '/sale', className: 'text-red-500' },
-                ...(user?.role === 'admin' ? [{ label: 'Админ Панель', path: '/admin', className: 'text-[var(--color-portal-green)]' }] : []),
-                { label: 'Профиль', path: '/profile' }
+                ...(user?.role === 'admin' ? [{ label: 'Админка', path: '/admin', className: 'text-[var(--color-portal-green)]' }] : []),
               ].map((item, i) => (
                 <motion.div
                   key={item.path}
@@ -248,7 +249,7 @@ const Navbar = ({ user, cartCount, favoritesCount, tonEnabled }: { user: User | 
                   <Link 
                     to={item.path} 
                     onClick={() => setIsOpen(false)} 
-                    className={cn("text-5xl font-black uppercase tracking-tighter italic hover:text-[var(--color-portal-green)] transition-all hover:scale-110", item.className)}
+                    className={cn("text-3xl sm:text-5xl font-black uppercase tracking-tighter italic hover:text-[var(--color-portal-green)] transition-all hover:scale-110", item.className)}
                   >
                     {item.label}
                   </Link>
@@ -268,71 +269,13 @@ const Navbar = ({ user, cartCount, favoritesCount, tonEnabled }: { user: User | 
 };
 
 const HorizontalScroll = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [showLeft, setShowLeft] = useState(false);
-  const [showRight, setShowRight] = useState(true);
-
-  const checkScroll = () => {
-    if (!scrollRef.current) return;
-    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-    setShowLeft(scrollLeft > 20);
-    setShowRight(scrollLeft < scrollWidth - clientWidth - 20);
-  };
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) {
-      checkScroll();
-      el.addEventListener('scroll', checkScroll);
-      window.addEventListener('resize', checkScroll);
-      return () => {
-        el.removeEventListener('scroll', checkScroll);
-        window.removeEventListener('resize', checkScroll);
-      };
-    }
-  }, []);
-
-  const scroll = (direction: 'left' | 'right') => {
-    if (!scrollRef.current) return;
-    const amount = scrollRef.current.clientWidth * 0.8;
-    scrollRef.current.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
-  };
-
   return (
-    <div className={cn("relative group", className)}>
-      <AnimatePresence>
-        {showLeft && (
-            <motion.button
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              onClick={() => scroll('left')}
-              className="absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-14 sm:h-14 bg-black/80 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--color-portal-green)] hover:text-black transition-all hover:scale-110 shadow-xl shadow-black/50"
-            >
-              <ChevronLeft size={24} />
-            </motion.button>
-        )}
-      </AnimatePresence>
-      <div 
-        ref={scrollRef} 
-        onScroll={checkScroll}
-        className="flex gap-4 overflow-x-auto scrollbar-hide px-4 md:px-0 py-2"
-      >
-        {children}
+    <div className={cn("relative w-full -mx-4 px-4 sm:mx-0 sm:px-0", className)}>
+      <div className="flex gap-3 sm:gap-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-4">
+        {React.Children.map(children, (child) => (
+          <div className="snap-start shrink-0">{child}</div>
+        ))}
       </div>
-      <AnimatePresence>
-        {showRight && (
-            <motion.button
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              onClick={() => scroll('right')}
-              className="absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-14 sm:h-14 bg-black/80 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--color-portal-green)] hover:text-black transition-all hover:scale-110 shadow-xl shadow-black/50"
-            >
-              <ChevronRight size={24} />
-            </motion.button>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
@@ -707,7 +650,7 @@ const HomePage = ({ onAddToCart, onViewDetails, favoriteIds, onToggleFavorite }:
         initial={{ y: 50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-        className="relative overflow-hidden rounded-[50px] sm:rounded-[80px] glass p-10 sm:p-24 flex flex-col items-center text-center gap-10 border-dashed group"
+        className="relative overflow-hidden rounded-[30px] sm:rounded-[50px] md:rounded-[80px] glass p-6 sm:p-12 md:p-24 flex flex-col items-center text-center gap-6 sm:gap-10 border-dashed group"
       >
         <div className="absolute top-0 left-0 w-full h-full portal-bg opacity-10 pointer-events-none group-hover:opacity-20 transition-opacity duration-1000" />
         <div className="space-y-8 relative z-10">
@@ -719,7 +662,7 @@ const HomePage = ({ onAddToCart, onViewDetails, favoriteIds, onToggleFavorite }:
           >
             ИЗМЕРЕНИЕ C-137
           </motion.div>
-          <h1 className="text-6xl sm:text-8xl md:text-9xl lg:text-[140px] font-black uppercase tracking-tighter leading-[0.8] italic overflow-hidden">
+          <h1 className="text-5xl sm:text-7xl md:text-9xl lg:text-[140px] font-black uppercase tracking-tighter leading-[0.85] italic overflow-hidden">
             {["BARAHOLKA", "SHOP"].map((word, i) => (
               <motion.span 
                 key={i}
@@ -1240,10 +1183,12 @@ const ProfilePage = ({ user, onLogout, tonEnabled }: { user: User | null, onLogo
   );
 };
 
-const LoginPage = ({ onLogin }: { onLogin: (user: User) => void }) => {
+const LoginPage = ({ onLogin, botUsername }: { onLogin: (user: User) => void, botUsername?: string }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!botUsername) return; // Wait for botUsername
+    
     // Define the widget callback in window
     (window as any).onTelegramAuth = (user: any) => {
       fetch('/api/auth/telegram', {
@@ -1259,7 +1204,7 @@ const LoginPage = ({ onLogin }: { onLogin: (user: User) => void }) => {
 
     const script = document.createElement('script');
     script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute('data-telegram-login', import.meta.env.VITE_TELEGRAM_BOT_USERNAME || 'BARAHOLKA_SHOP_BOT');
+    script.setAttribute('data-telegram-login', botUsername);
     script.setAttribute('data-size', 'large');
     script.setAttribute('data-radius', '16');
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
@@ -1276,7 +1221,7 @@ const LoginPage = ({ onLogin }: { onLogin: (user: User) => void }) => {
       }
       delete (window as any).onTelegramAuth;
     };
-  }, []);
+  }, [botUsername]);
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
@@ -1288,7 +1233,11 @@ const LoginPage = ({ onLogin }: { onLogin: (user: User) => void }) => {
           </div>
           <div className="space-y-2">
             <h1 className="text-3xl sm:text-4xl font-black tracking-tighter uppercase leading-tight">АВТОРИЗАЦИЯ</h1>
-            <p className="text-white/40 text-xs sm:text-sm px-2">Используйте официальный виджет Telegram для безопасного входа в мультивселенную Baraholka.</p>
+            <p className="text-white/40 text-xs sm:text-sm px-2">
+              {botUsername
+                ? 'Используйте официальный виджет Telegram для безопасного входа в мультивселенную Baraholka.'
+                : 'Загрузка конфигурации портала...'}
+            </p>
           </div>
           
           <div className="space-y-6 flex flex-col items-center">
@@ -2430,7 +2379,7 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                       />
                     </div>
                     <div className="space-y-3">
-                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">Bot Username (VITE_TELEGRAM_BOT_USERNAME)</label>
+                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">Bot Username</label>
                       <input 
                         type="text" 
                         value={settings.telegram_bot_username || ''}
@@ -2748,7 +2697,7 @@ export default function App() {
             >
               <Routes location={location}>
                 <Route path="/" element={<HomePage onAddToCart={addToCart} onViewDetails={setSelectedProduct} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} />} />
-                <Route path="/login" element={<LoginPage onLogin={setUser} />} />
+                <Route path="/login" element={<LoginPage onLogin={setUser} botUsername={appSettings.telegram_bot_username} />} />
                 <Route path="/admin/login" element={<AdminLoginPage onLogin={setUser} />} />
                 <Route path="/admin" element={<AdminDashboard user={user} />} />
                 <Route path="/catalog" element={<CatalogPage onAddToCart={addToCart} onViewDetails={setSelectedProduct} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} />} />

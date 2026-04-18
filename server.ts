@@ -486,7 +486,7 @@ app.patch('/api/admin/products/:id/stock', authenticate, isAdmin, (req, res) => 
 // Settings Management
 app.get('/api/settings', (req, res) => {
   const settings = db.prepare('SELECT * FROM settings').all() as { key: string, value: string }[];
-  const publicKeys = ['ton_payment_enabled', 'ton_wallet_address', 'welcome_message'];
+  const publicKeys = ['ton_payment_enabled', 'ton_wallet_address', 'welcome_message', 'telegram_bot_username'];
   const settingsMap = settings
     .filter(s => publicKeys.includes(s.key))
     .reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {});
