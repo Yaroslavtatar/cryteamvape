@@ -234,62 +234,7 @@ app.post('/api/auth/admin', (req, res) => {
   res.status(401).json({ error: 'Invalid credentials' });
 });
 
-app.post('/api/auth/twa', (req, res) => {
-  const { initData } = req.body;
 
-  if (!BOT_TOKEN) {
-    return res.status(500).json({ error: 'Server configuration error' });
-  }
-
-  const urlParams = new URLSearchParams(initData);
-  const hash = urlParams.get('hash');
-  const userParam = urlParams.get('user');
-
-  if (!hash || !userParam) {
-    return res.status(400).json({ error: 'Invalid initData' });
-  }
-
-  const dataCheckString = Array.from(urlParams.entries())
-    .filter(([key]) => key !== 'hash')
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${value}`)
-    .join('\n');
-
-  const secretKey = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
-  const computedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
-
-  if (computedHash !== hash) {
-    return res.status(401).json({ error: 'Invalid authentication' });
-  }
-
-  const telegramUser = JSON.parse(userParam);
-  const { id, first_name, last_name, username, photo_url } = telegramUser;
-
-  // Upsert user
-  const userCount = db.prepare('SELECT count(*) as count FROM users').get() as { count: number };
-  const role = userCount.count === 0 ? 'admin' : 'user';
-
-  const upsertUser = db.prepare(`
-    INSERT INTO users (telegram_id, username, first_name, last_name, photo_url, role)
-    VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(telegram_id) DO UPDATE SET
-      username = excluded.username,
-      first_name = excluded.first_name,
-      last_name = excluded.last_name,
-      photo_url = excluded.photo_url
-    RETURNING *
-  `);
-
-  const user = upsertUser.get(id, username, first_name, last_name, photo_url, role) as any;
-  
-  const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, getJwtSecret());
-  res.cookie('auth_token', token, { 
-    httpOnly: true, 
-    secure: true, 
-    sameSite: 'none' 
-  });
-  res.json({ user });
-});
 
 app.post('/api/auth/telegram', (req, res) => {
   const { id, first_name, last_name, username, photo_url, hash, auth_date } = req.body;
@@ -486,10 +431,18 @@ app.patch('/api/admin/products/:id/stock', authenticate, isAdmin, (req, res) => 
 // Settings Management
 app.get('/api/settings', (req, res) => {
   const settings = db.prepare('SELECT * FROM settings').all() as { key: string, value: string }[];
-  const publicKeys = ['ton_payment_enabled', 'ton_wallet_address', 'welcome_message', 'telegram_bot_username'];
+  const publicKeys = ['ton_payment_enabled', 'ton_wallet_address', 'welcome_message', 'telegram_bot_username', 'telegram_oauth_id', 'telegram_oauth_auth_url'];
+  
   const settingsMap = settings
     .filter(s => publicKeys.includes(s.key))
-    .reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {});
+    .reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {}) as any;
+
+  // Derive bot_id from bot_token dynamically for Seamless Auth
+  const botTokenSetting = settings.find(s => s.key === 'telegram_bot_token');
+  if (botTokenSetting?.value) {
+    settingsMap.telegram_bot_id = botTokenSetting.value.split(':')[0];
+  }
+
   res.json(settingsMap);
 });
 

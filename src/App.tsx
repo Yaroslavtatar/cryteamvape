@@ -156,6 +156,9 @@ interface AppSettings {
   ton_payment_enabled?: boolean;
   ton_wallet_address?: string;
   telegram_bot_username?: string;
+  telegram_bot_id?: string;
+  telegram_oauth_id?: string;
+  telegram_oauth_auth_url?: string;
 }
 
 const Navbar = ({ user, cartCount, favoritesCount, tonEnabled }: { user: User | null, cartCount: number, favoritesCount: number, tonEnabled: boolean }) => {
@@ -1183,45 +1186,50 @@ const ProfilePage = ({ user, onLogout, tonEnabled }: { user: User | null, onLogo
   );
 };
 
-const LoginPage = ({ onLogin, botUsername }: { onLogin: (user: User) => void, botUsername?: string }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!botUsername) return; // Wait for botUsername
+const LoginPage = ({ onLogin, settings }: { onLogin: (user: User) => void, settings: AppSettings }) => {
+  const handleManualAuth = () => {
+    const botId = settings.telegram_oauth_id || settings.telegram_bot_id;
+    const authUrl = settings.telegram_oauth_auth_url || 'https://oauth.telegram.org/auth';
     
-    // Define the widget callback in window
-    (window as any).onTelegramAuth = (user: any) => {
-      fetch('/api/auth/telegram', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(user)
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.user) onLogin(data.user);
-      });
-    };
-
-    const script = document.createElement('script');
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.setAttribute('data-telegram-login', botUsername);
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-radius', '16');
-    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-    script.setAttribute('data-request-access', 'write');
-    script.async = true;
-
-    if (containerRef.current) {
-      containerRef.current.appendChild(script);
+    if (!botId) {
+      alert("Бот ID или OAuth ID не настроены в админ-панели.");
+      return;
     }
 
-    return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
+    const params = new URLSearchParams({
+      bot_id: botId,
+      origin: window.location.origin,
+      request_access: 'write',
+    });
+
+    const url = `${authUrl}?${params.toString()}`;
+    window.open(url, 'oauth_popup', 'width=600,height=700');
+  };
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (typeof event.data !== 'string') return;
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === 'auth_result' && data.result) {
+          fetch('/api/auth/telegram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data.result)
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.user) onLogin(data.user);
+          });
+        }
+      } catch (err) {
+        // Ignore non-json messages
       }
-      delete (window as any).onTelegramAuth;
     };
-  }, [botUsername]);
+    
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onLogin]);
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
@@ -1234,18 +1242,20 @@ const LoginPage = ({ onLogin, botUsername }: { onLogin: (user: User) => void, bo
           <div className="space-y-2">
             <h1 className="text-3xl sm:text-4xl font-black tracking-tighter uppercase leading-tight">АВТОРИЗАЦИЯ</h1>
             <p className="text-white/40 text-xs sm:text-sm px-2">
-              {botUsername
-                ? 'Используйте официальный виджет Telegram для безопасного входа в мультивселенную Baraholka.'
-                : 'Загрузка конфигурации портала...'}
+              Используйте Seamless Login (OAuth) для входа без ограничений браузера.
             </p>
           </div>
           
           <div className="space-y-6 flex flex-col items-center">
-            <div ref={containerRef} className="min-h-[54px] flex items-center justify-center" />
-            
-            <div className="text-[10px] text-white/20 uppercase tracking-[0.2em] font-bold">
-              Ожидание авторизации через виджет выше
-            </div>
+            <button 
+              onClick={handleManualAuth}
+              className="w-full py-4 bg-[#2AABEE] text-white font-black rounded-2xl hover:scale-105 transition-transform uppercase tracking-widest shadow-lg shadow-[#2AABEE]/20 flex items-center justify-center gap-3"
+            >
+              <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .24z"/>
+              </svg>
+              Вход через Telegram
+            </button>
             
             <div className="pt-8 border-t border-white/5 w-full">
               <Link to="/admin/login" className="text-white/30 text-[10px] font-bold uppercase tracking-widest hover:text-[var(--color-portal-green)] transition-colors">
@@ -2551,7 +2561,7 @@ export default function App() {
     fetch('/api/me')
       .then(res => res.ok ? res.json() : null)
       .then(data => {
-        if (data) {
+        if (data && data.user) {
           setUser(data.user);
         } else if (window.Telegram?.WebApp?.initData) {
           // If no session but in TWA, try auto-login
@@ -2565,7 +2575,7 @@ export default function App() {
             body: JSON.stringify({ initData: tg.initData })
           })
           .then(res => res.ok ? res.json() : null)
-          .then(data => data && setUser(data.user))
+          .then(data => data && data.user && setUser(data.user))
           .catch(err => console.error('TWA Auth failed:', err));
         }
       });
@@ -2697,7 +2707,7 @@ export default function App() {
             >
               <Routes location={location}>
                 <Route path="/" element={<HomePage onAddToCart={addToCart} onViewDetails={setSelectedProduct} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} />} />
-                <Route path="/login" element={<LoginPage onLogin={setUser} botUsername={appSettings.telegram_bot_username} />} />
+                <Route path="/login" element={<LoginPage onLogin={setUser} settings={appSettings} />} />
                 <Route path="/admin/login" element={<AdminLoginPage onLogin={setUser} />} />
                 <Route path="/admin" element={<AdminDashboard user={user} />} />
                 <Route path="/catalog" element={<CatalogPage onAddToCart={addToCart} onViewDetails={setSelectedProduct} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} />} />
