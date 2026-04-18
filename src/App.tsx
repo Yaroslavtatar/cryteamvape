@@ -2610,7 +2610,7 @@ export default function App() {
           tg.ready();
           tg.expand();
           
-          fetch('/api/auth/twa', {
+          fetch('/api/auth/webapp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ initData: tg.initData })
@@ -2692,15 +2692,22 @@ export default function App() {
       const data = await res.json();
       setCart([]);
       
+      if (data.error) {
+        alert(data.error);
+      }
+
       if (data.confirmation_url) {
         window.location.href = data.confirmation_url;
         return;
       }
 
+      if (data.redirect) {
+        navigate(data.redirect);
+        return;
+      }
+
       if (paymentMethod === 'ton') {
         alert('Заказ оформлен через TON! Транзакция обрабатывается.');
-      } else {
-        alert('Заказ оформлен! Оплатите гарантию 50 ₽ в боте.');
       }
       navigate('/profile');
     });
