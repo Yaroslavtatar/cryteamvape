@@ -170,15 +170,27 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 
-const JWT_SECRET = process.env.JWT_SECRET || 'pickle-rick-secret';
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const resolveSetting = (key: string, envVal: string | undefined, defaultVal: string) => {
+  try {
+    const fromDb = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string };
+    if (fromDb && fromDb.value) return fromDb.value;
+  } catch (e) {
+    // DB might not be ready yet
+  }
+  return envVal || defaultVal;
+};
+
+// Use middleware to get JWT dynamically because it might change in admin panel
+const getJwtSecret = () => resolveSetting('jwt_secret', process.env.JWT_SECRET, 'pickle-rick-secret');
+const getAppUrl = () => resolveSetting('app_url', process.env.APP_URL, '');
+const getBotToken = () => resolveSetting('telegram_bot_token', process.env.TELEGRAM_BOT_TOKEN, '');
 
 // Auth Middleware
 const authenticate = (req: any, res: any, next: any) => {
   const token = req.cookies.auth_token;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try {
-    req.user = jwt.verify(token, JWT_SECRET);
+    req.user = jwt.verify(token, getJwtSecret());
     next();
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' });
@@ -198,7 +210,7 @@ app.post('/api/auth/admin', (req, res) => {
   // In a real app we would use bcrypt, but for this Rick & Morty theme we'll allow simple comparison
   // or a specific hardcoded admin if none exists
   if (user && user.password === password) {
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET);
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, getJwtSecret());
     res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
     return res.json({ user });
   }
@@ -254,7 +266,7 @@ app.post('/api/auth/twa', (req, res) => {
 
   const user = upsertUser.get(id, username, first_name, last_name, photo_url, role) as any;
   
-  const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, JWT_SECRET);
+  const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, getJwtSecret());
   res.cookie('auth_token', token, { 
     httpOnly: true, 
     secure: true, 
@@ -266,7 +278,7 @@ app.post('/api/auth/twa', (req, res) => {
 app.post('/api/auth/telegram', (req, res) => {
   const { id, first_name, last_name, username, photo_url, hash, auth_date } = req.body;
 
-  if (!BOT_TOKEN) {
+  if (!getBotToken()) {
     console.error('TELEGRAM_BOT_TOKEN is not set');
     return res.status(500).json({ error: 'Server configuration error' });
   }
@@ -278,7 +290,7 @@ app.post('/api/auth/telegram', (req, res) => {
     .map(key => `${key}=${req.body[key]}`)
     .join('\n');
 
-  const secretKey = crypto.createHash('sha256').update(BOT_TOKEN).digest();
+  const secretKey = crypto.createHash('sha256').update(getBotToken()).digest();
   const hmac = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
 
   if (hmac !== hash) {
@@ -307,7 +319,7 @@ app.post('/api/auth/telegram', (req, res) => {
     db.prepare('UPDATE users SET password = ? WHERE id = ?').run('admin123', user.id);
   }
 
-  const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, JWT_SECRET);
+  const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, getJwtSecret());
 
   res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
   res.json({ user });
@@ -317,7 +329,7 @@ app.get('/api/me', (req, res) => {
   const token = req.cookies.auth_token;
   if (!token) return res.json({ user: null });
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, getJwtSecret()) as any;
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.id);
     res.json({ user });
   } catch (err) {
@@ -475,7 +487,7 @@ app.post('/api/orders', authenticate, async (req: any, res) => {
           },
           confirmation: {
             type: "redirect",
-            return_url: `${process.env.APP_URL || ''}/profile`
+            return_url: `${getAppUrl()}/profile?success=true`
           },
           capture: true,
           description: `Заказ #${orderId} - Гарантия оплаты`,

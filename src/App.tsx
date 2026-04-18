@@ -35,7 +35,11 @@ import {
   Send,
   Heart,
   Upload,
-  Edit3
+  Edit3,
+  Database,
+  Globe,
+  Key,
+  ShieldAlert
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
@@ -1113,8 +1117,10 @@ const FavoritesPage = ({ user, onAddToCart, onViewDetails, favoriteIds, onToggle
 const ProfilePage = ({ user, onLogout, tonEnabled }: { user: User | null, onLogout: () => void, tonEnabled: boolean }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const navigate = useNavigate();
+  const location = useLocation();
   const [tonConnectUI] = useTonConnectUI();
   const wallet = tonConnectUI.wallet;
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -1122,12 +1128,53 @@ const ProfilePage = ({ user, onLogout, tonEnabled }: { user: User | null, onLogo
       return;
     }
     fetch('/api/orders/my').then(res => res.json()).then(data => setOrders(Array.isArray(data) ? data : []));
-  }, [user]);
+    
+    const params = new URLSearchParams(location.search);
+    if (params.get('success') === 'true') {
+      setShowSuccessModal(true);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [user, location]);
 
   if (!user) return null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-6 sm:space-y-10 overflow-hidden">
+    <div className="max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-6 sm:space-y-10 overflow-hidden relative">
+      <AnimatePresence>
+        {showSuccessModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowSuccessModal(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.8, y: 50, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.8, y: 50, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#111] border border-[var(--color-portal-green)]/30 rounded-[40px] p-8 sm:p-12 max-w-lg w-full text-center shadow-2xl relative overflow-hidden"
+            >
+              <div className="absolute -top-24 -left-24 w-48 h-48 bg-[var(--color-portal-green)]/20 blur-[60px] rounded-full pointer-events-none" />
+              <div className="mx-auto w-20 h-20 bg-[var(--color-portal-green)]/10 rounded-full flex items-center justify-center mb-6">
+                <CheckCircle2 size={40} className="text-[var(--color-portal-green)]" />
+              </div>
+              <h2 className="text-3xl font-black uppercase tracking-tighter italic mb-4">Оплата <span className="text-[var(--color-portal-green)] outline-glow">успешна</span></h2>
+              <p className="text-white/60 mb-8 font-bold leading-relaxed">
+                Ваш заказ успешно оформлен и оплачен. Ожидайте, с вами обязательно свяжется менеджер и уточнит все детали доставки.
+              </p>
+              <button 
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full py-4 bg-[var(--color-portal-green)] text-black font-black uppercase tracking-widest rounded-2xl hover:bg-[var(--color-acid-green)] transition-all"
+              >
+                Понятно, спасибо
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="glass p-6 sm:p-10 rounded-[30px] sm:rounded-[40px] flex flex-col md:flex-row items-center gap-6 sm:gap-8 border-dashed">
         <div className="w-24 h-24 sm:w-32 sm:h-32 shrink-0 rounded-[30px] sm:rounded-[40px] bg-[var(--color-portal-green)] flex items-center justify-center text-4xl sm:text-5xl font-black text-black rotate-6 shadow-xl shadow-[var(--color-portal-green)]/10">
           {user.first_name[0]}
@@ -1779,7 +1826,7 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
             { id: 'orders', label: 'Заказы', icon: <Package size={14}/> },
             { id: 'products', label: 'Склад', icon: <Settings size={14}/> },
             { id: 'users', label: 'Клиенты', icon: <User size={14}/> },
-            { id: 'payments', label: 'Платежи', icon: <CreditCard size={14}/> }
+            { id: 'settings', label: 'Настройки', icon: <Settings size={14}/> }
           ].map(tab => (
             <button 
               key={tab.id}
@@ -1857,7 +1904,7 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                         className="hover:bg-white/5 transition-colors"
                       >
                         <td className="px-8 py-6 font-mono text-xs opacity-50">#{order.id}</td>
-                        <td className="px-8 py-6 font-bold">{order.username || order.first_name}</td>
+                        <td className="px-8 py-6 font-bold">{order.username ? `@${order.username}` : order.first_name}</td>
                         <td className="px-8 py-6">
                           <div className="text-[10px] font-bold uppercase">{getDeliveryLabel(order.delivery_method || 'N/A')}</div>
                           <div className="text-[9px] text-white/30 truncate max-w-[150px]">{order.delivery_address || '-'}</div>
@@ -2331,15 +2378,122 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
             </div>
           )}
 
-          {activeTab === 'payments' && (
-            <div className="glass p-10 rounded-[40px] max-w-2xl border-dashed space-y-12">
+          {activeTab === 'settings' && (
+            <div className="glass p-10 rounded-[40px] max-w-2xl border-dashed space-y-12 mb-20 md:mb-0">
               <div className="space-y-4">
-                <h2 className="text-3xl font-black uppercase tracking-tighter">ПЛАТЕЖИ</h2>
-                <p className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-bold">Настройка API измерений</p>
+                <h2 className="text-3xl font-black uppercase tracking-tighter">НАСТРОЙКИ</h2>
+                <p className="text-white/30 text-[10px] uppercase tracking-[0.3em] font-bold">Управление конфигурацией системы</p>
               </div>
               
               <div className="space-y-12">
                 <div className="space-y-8">
+                  <h3 className="text-lg font-black uppercase tracking-widest text-[#9c27b0] flex items-center gap-3">
+                    <Globe size={22} /> SYSTEM CORE
+                  </h3>
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">App URL (Base Domain)</label>
+                      <input 
+                        type="text" 
+                        value={settings.app_url || ''}
+                        onChange={(e) => setSettings({ ...settings, app_url: e.target.value })}
+                        placeholder="https://myshop.ru"
+                        className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-[#9c27b0] transition-all placeholder:text-white/5"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">JWT Secret Key (Осторожно)</label>
+                      <input 
+                        type="password" 
+                        value={settings.jwt_secret || ''}
+                        onChange={(e) => setSettings({ ...settings, jwt_secret: e.target.value })}
+                        placeholder="super-secret-key-for-sessions"
+                        className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-[#9c27b0] transition-all placeholder:text-white/5"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-8 border-t border-white/5 pt-12">
+                  <h3 className="text-lg font-black uppercase tracking-widest text-[#2AABEE] flex items-center gap-3">
+                    <Send size={22} /> TELEGRAM BOT
+                  </h3>
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">Bot Token</label>
+                      <input 
+                        type="password" 
+                        value={settings.telegram_bot_token || ''}
+                        onChange={(e) => setSettings({ ...settings, telegram_bot_token: e.target.value })}
+                        placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+                        className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-[#2AABEE] transition-all placeholder:text-white/5"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">Bot Username (VITE_TELEGRAM_BOT_USERNAME)</label>
+                      <input 
+                        type="text" 
+                        value={settings.telegram_bot_username || ''}
+                        onChange={(e) => setSettings({ ...settings, telegram_bot_username: e.target.value })}
+                        placeholder="my_shop_bot"
+                        className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-[#2AABEE] transition-all placeholder:text-white/5"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-8 border-t border-white/5 pt-12">
+                  <h3 className="text-lg font-black uppercase tracking-widest text-[#2AABEE] flex items-center gap-3">
+                    <ShieldAlert size={22} /> TELEGRAM OAUTH 2.0 (OPENID)
+                  </h3>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">OAuth ID</label>
+                        <input 
+                          type="text" 
+                          value={settings.telegram_oauth_id || ''}
+                          onChange={(e) => setSettings({ ...settings, telegram_oauth_id: e.target.value })}
+                          placeholder="7658719788"
+                          className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-[#2AABEE] transition-all placeholder:text-white/5"
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">OAuth Secret</label>
+                        <input 
+                          type="password" 
+                          value={settings.telegram_oauth_secret || ''}
+                          onChange={(e) => setSettings({ ...settings, telegram_oauth_secret: e.target.value })}
+                          placeholder="CGOzBQ84Y6MNEJInp1oCk6..."
+                          className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-[#2AABEE] transition-all placeholder:text-white/5"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">Auth URL</label>
+                      <input 
+                        type="text" 
+                        value={settings.telegram_oauth_auth_url || ''}
+                        onChange={(e) => setSettings({ ...settings, telegram_oauth_auth_url: e.target.value })}
+                        placeholder="https://oauth.telegram.org/auth"
+                        className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-[#2AABEE] transition-all placeholder:text-white/5"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">Token URL</label>
+                      <input 
+                        type="text" 
+                        value={settings.telegram_oauth_token_url || ''}
+                        onChange={(e) => setSettings({ ...settings, telegram_oauth_token_url: e.target.value })}
+                        placeholder="https://oauth.telegram.org/token"
+                        className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-[#2AABEE] transition-all placeholder:text-white/5"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-8 border-t border-white/5 pt-12">
                   <h3 className="text-lg font-black uppercase tracking-widest text-[var(--color-portal-green)] flex items-center gap-3">
                     <CreditCard size={22} /> ЮKASSA
                   </h3>
