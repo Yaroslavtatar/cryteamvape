@@ -159,6 +159,16 @@ interface AppSettings {
   telegram_bot_id?: string;
   telegram_oauth_id?: string;
   telegram_oauth_auth_url?: string;
+  redis_url?: string;
+  redis_products_pattern?: string;
+  redis_users_pattern?: string;
+  redis_mapping_product_name?: string;
+  redis_mapping_product_price?: string;
+  redis_mapping_product_desc?: string;
+  redis_mapping_product_image?: string;
+  redis_mapping_product_stock?: string;
+  redis_mapping_user_tgid?: string;
+  redis_mapping_user_name?: string;
 }
 
 const Navbar = ({ user, cartCount, favoritesCount, tonEnabled }: { user: User | null, cartCount: number, favoritesCount: number, tonEnabled: boolean }) => {
@@ -1614,7 +1624,7 @@ const CartPage = ({ cart, onRemove, onCheckout, tonEnabled }: { cart: Product[],
   );
 };
 
-const AdminDashboard = ({ user }: { user: User | null }) => {
+const AdminDashboard = ({ user, onLogout }: { user: User | null, onLogout: () => void }) => {
   const [stats, setStats] = useState<any>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -1672,6 +1682,16 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
     }).then(() => {
       setProducts(products.map(p => p.id === id ? { ...p, stock: newStock } : p));
     });
+  };
+
+  const handleDeleteProduct = (id: number) => {
+    if (confirm('Вы уверены, что хотите удалить этот товар?')) {
+      fetch(`/api/admin/products/${id}`, {
+        method: 'DELETE'
+      }).then(() => {
+        setProducts(products.filter(p => p.id !== id));
+      });
+    }
   };
 
   const openEditModal = (product: Product) => {
@@ -1779,34 +1799,48 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-black tracking-tighter uppercase leading-tight shrink-0 italic">
           АДМИН <span className="text-[var(--color-portal-green)] outline-glow">ПАНЕЛЬ</span>
         </h1>
-        <div className="flex bg-white/5 p-1.5 rounded-[22px] border border-white/10 overflow-x-auto scrollbar-hide">
-          {[
-            { id: 'stats', label: 'Данные', icon: <TrendingUp size={14}/> },
-            { id: 'orders', label: 'Заказы', icon: <Package size={14}/> },
-            { id: 'products', label: 'Склад', icon: <Settings size={14}/> },
-            { id: 'users', label: 'Клиенты', icon: <User size={14}/> },
-            { id: 'settings', label: 'Настройки', icon: <Settings size={14}/> }
-          ].map(tab => (
-            <button 
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className="relative px-6 py-3 rounded-2xl text-[10px] font-black transition-all flex items-center gap-2 uppercase tracking-[0.2em] text-nowrap group shrink-0"
-            >
-              {activeTab === tab.id && (
-                <motion.div 
-                  layoutId="active-admin-tab"
-                  className="absolute inset-0 bg-[var(--color-portal-green)] rounded-2xl z-0 shadow-[0_0_20px_rgba(68,255,0,0.3)]"
-                  transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                />
-              )}
-              <span className={cn(
-                "relative z-10 flex items-center gap-2",
-                activeTab === tab.id ? "text-black" : "text-white/30 group-hover:text-white group-hover:bg-white/5"
-              )}>
-                {tab.icon} {tab.label}
-              </span>
-            </button>
-          ))}
+        <div className="flex gap-2">
+          <div className="flex bg-white/5 p-1.5 rounded-[22px] border border-white/10 overflow-x-auto scrollbar-hide">
+            {[
+              { id: 'stats', label: 'Данные', icon: <TrendingUp size={14}/> },
+              { id: 'orders', label: 'Заказы', icon: <Package size={14}/> },
+              { id: 'products', label: 'Склад', icon: <Settings size={14}/> },
+              { id: 'users', label: 'Клиенты', icon: <User size={14}/> },
+              { id: 'settings', label: 'Настройки', icon: <Settings size={14}/> }
+            ].map(tab => (
+              <button 
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className="relative px-6 py-3 rounded-2xl text-[10px] font-black transition-all flex items-center gap-2 uppercase tracking-[0.2em] text-nowrap group shrink-0"
+              >
+                {activeTab === tab.id && (
+                  <motion.div 
+                    layoutId="active-admin-tab"
+                    className="absolute inset-0 bg-[var(--color-portal-green)] rounded-2xl z-0 shadow-[0_0_20px_rgba(68,255,0,0.3)]"
+                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                  />
+                )}
+                <span className={cn(
+                  "relative z-10 flex items-center gap-2",
+                  activeTab === tab.id ? "text-black" : "text-white/30 group-hover:text-white group-hover:bg-white/5"
+                )}>
+                  {tab.icon} {tab.label}
+                </span>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => {
+              fetch('/api/logout', { method: 'POST' }).then(() => {
+                onLogout();
+                navigate('/');
+              });
+            }}
+            className="flex items-center gap-2 px-6 py-3 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-[22px] text-[10px] font-black transition-all uppercase tracking-[0.2em] shrink-0 border border-red-500/20"
+            title="Выйти из админ-панели"
+          >
+            <LogOut size={14} /> Выход
+          </button>
         </div>
       </div>
 
@@ -2199,7 +2233,7 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                         >
                           <Edit3 size={20} />
                         </button>
-                        <button className="p-3 text-white/20 hover:text-red-500 transition-colors">
+                        <button onClick={() => handleDeleteProduct(p.id)} className="p-3 text-white/20 hover:text-red-500 transition-colors">
                           <Trash2 size={20} />
                         </button>
                       </div>
@@ -2481,6 +2515,95 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                 </div>
 
                 <div className="space-y-8 border-t border-white/5 pt-12">
+                  <h3 className="text-lg font-black uppercase tracking-widest text-red-500 flex items-center gap-3">
+                    <Database size={22} /> ИМПОРТ ИЗ REDIS
+                  </h3>
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">Redis URL</label>
+                      <input 
+                        type="text" 
+                        value={settings.redis_url || ''}
+                        onChange={(e) => setSettings({ ...settings, redis_url: e.target.value })}
+                        placeholder="redis://127.0.0.1:6379"
+                        className="w-full bg-white/5 border border-white/10 rounded-3xl py-5 px-8 text-lg font-bold focus:outline-none focus:border-red-500 transition-all placeholder:text-white/5"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="glass p-6 rounded-[24px] border border-white/5 space-y-4">
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-white/50 border-b border-white/5 pb-2">Товары</h4>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Ключ Pattern</label>
+                          <input type="text" value={settings.redis_products_pattern || ''} onChange={(e) => setSettings({...settings, redis_products_pattern: e.target.value})} placeholder="products:*" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Поле: Название</label>
+                          <input type="text" value={settings.redis_mapping_product_name || ''} onChange={(e) => setSettings({...settings, redis_mapping_product_name: e.target.value})} placeholder="name" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Поле: Цена</label>
+                          <input type="text" value={settings.redis_mapping_product_price || ''} onChange={(e) => setSettings({...settings, redis_mapping_product_price: e.target.value})} placeholder="price" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Поле: Описание</label>
+                          <input type="text" value={settings.redis_mapping_product_desc || ''} onChange={(e) => setSettings({...settings, redis_mapping_product_desc: e.target.value})} placeholder="description" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Поле: Картинка</label>
+                          <input type="text" value={settings.redis_mapping_product_image || ''} onChange={(e) => setSettings({...settings, redis_mapping_product_image: e.target.value})} placeholder="image_url" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Поле: Остаток</label>
+                          <input type="text" value={settings.redis_mapping_product_stock || ''} onChange={(e) => setSettings({...settings, redis_mapping_product_stock: e.target.value})} placeholder="stock" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                      </div>
+
+                      <div className="glass p-6 rounded-[24px] border border-white/5 space-y-4">
+                        <h4 className="text-sm font-bold uppercase tracking-widest text-white/50 border-b border-white/5 pb-2">Пользователи</h4>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Ключ Pattern</label>
+                          <input type="text" value={settings.redis_users_pattern || ''} onChange={(e) => setSettings({...settings, redis_users_pattern: e.target.value})} placeholder="user:*" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Поле: Telegram ID</label>
+                          <input type="text" value={settings.redis_mapping_user_tgid || ''} onChange={(e) => setSettings({...settings, redis_mapping_user_tgid: e.target.value})} placeholder="telegram_id" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                        <div className="space-y-3">
+                          <label className="text-[10px] text-white/30 uppercase font-bold tracking-widest">Поле: Username</label>
+                          <input type="text" value={settings.redis_mapping_user_name || ''} onChange={(e) => setSettings({...settings, redis_mapping_user_name: e.target.value})} placeholder="username" className="w-full bg-black/30 border border-white/5 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-red-500" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        fetch('/api/admin/settings', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ settings })
+                        }).then(() => {
+                          fetch('/api/admin/import/redis', { method: 'POST' })
+                            .then(res => res.json())
+                            .then(data => {
+                              if (data.success) {
+                                alert(data.message);
+                                window.location.reload();
+                              } else {
+                                alert('Ошибка: ' + data.error);
+                              }
+                            })
+                            .catch(e => alert('Сетевая ошибка при импорте'));
+                        });
+                      }}
+                      className="w-full py-5 bg-red-500/20 text-red-500 font-black rounded-[24px] hover:bg-red-500 hover:text-white transition-all uppercase tracking-[0.2em] shadow-lg flex items-center justify-center gap-3 border border-red-500/20"
+                    >
+                      <Database size={20} /> Запустить Импорт из Redis
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-8 border-t border-white/5 pt-12">
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-black uppercase tracking-widest text-[var(--color-portal-green)] flex items-center gap-3">
                       <Zap size={22} /> TON PAYMENT
@@ -2709,7 +2832,7 @@ export default function App() {
                 <Route path="/" element={<HomePage onAddToCart={addToCart} onViewDetails={setSelectedProduct} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} />} />
                 <Route path="/login" element={<LoginPage onLogin={setUser} settings={appSettings} />} />
                 <Route path="/admin/login" element={<AdminLoginPage onLogin={setUser} />} />
-                <Route path="/admin" element={<AdminDashboard user={user} />} />
+                <Route path="/admin" element={<AdminDashboard user={user} onLogout={() => setUser(null)} />} />
                 <Route path="/catalog" element={<CatalogPage onAddToCart={addToCart} onViewDetails={setSelectedProduct} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} />} />
                 <Route path="/favorites" element={<FavoritesPage user={user} onAddToCart={addToCart} onViewDetails={setSelectedProduct} favoriteIds={favoriteIds} onToggleFavorite={toggleFavorite} />} />
                 <Route path="/cart" element={<CartPage cart={cart} onRemove={removeFromCart} onCheckout={handleCheckout} tonEnabled={!!appSettings.ton_payment_enabled} />} />

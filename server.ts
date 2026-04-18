@@ -10,6 +10,7 @@ import axios from 'axios';
 import multer from 'multer';
 import fs from 'fs';
 import 'dotenv/config';
+import Redis from 'ioredis';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.DATA_DIR || __dirname;
@@ -227,7 +228,7 @@ app.post('/api/auth/admin', (req, res) => {
   // or a specific hardcoded admin if none exists
   if (user && user.password === password) {
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, getJwtSecret());
-    res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+    res.cookie('auth_token', token, { httpOnly: true, secure: true, sameSite: 'none' });
     return res.json({ user });
   }
   
@@ -282,7 +283,7 @@ app.post('/api/auth/telegram', (req, res) => {
 
   const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, getJwtSecret());
 
-  res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+  res.cookie('auth_token', token, { httpOnly: true, secure: true, sameSite: 'none' });
   res.json({ user });
 });
 
@@ -333,7 +334,7 @@ app.post('/api/auth/webapp', (req, res) => {
   }
 
   const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, getJwtSecret());
-  res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production' });
+  res.cookie('auth_token', token, { httpOnly: true, secure: true, sameSite: 'none' });
   res.json({ user });
 });
 
@@ -350,7 +351,7 @@ app.get('/api/me', (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('auth_token');
+  res.clearCookie('auth_token', { httpOnly: true, secure: true, sameSite: 'none' });
   res.json({ success: true });
 });
 
@@ -403,6 +404,13 @@ app.put('/api/admin/products/:id', authenticate, isAdmin, (req, res) => {
       stock = ?, nicotine = ?, volume = ?, flavor = ?, is_sale = ?, is_used = ?
     WHERE id = ?
   `).run(category_id, name, description, price, image_url, stock, nicotine, volume, flavor, is_sale ? 1 : 0, is_used ? 1 : 0, req.params.id);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/products/:id', authenticate, isAdmin, (req, res) => {
+  db.prepare('DELETE FROM products WHERE id = ?').run(req.params.id);
+  // Also clean up favorites referencing it
+  db.prepare('DELETE FROM favorites WHERE product_id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
@@ -480,6 +488,116 @@ app.get('/api/admin/users', authenticate, isAdmin, (req, res) => {
     FROM users u
   `).all();
   res.json(users);
+});
+
+// Redis Import
+app.post('/api/admin/import/redis', authenticate, isAdmin, async (req, res) => {
+  try {
+    const getSetting = (k: string) => (db.prepare('SELECT value FROM settings WHERE key = ?').get(k) as any)?.value;
+    
+    const redisUrl = getSetting('redis_url');
+    if (!redisUrl) throw new Error('Redis URL не настроен');
+
+    const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1, connectTimeout: 5000 });
+    
+    // Test connection
+    await redis.ping();
+
+    // Import Products
+    const prodPattern = getSetting('redis_products_pattern');
+    let productsImported = 0;
+    
+    if (prodPattern) {
+      const keys = await redis.keys(prodPattern);
+      const nameCol = getSetting('redis_mapping_product_name') || 'name';
+      const priceCol = getSetting('redis_mapping_product_price') || 'price';
+      const descCol = getSetting('redis_mapping_product_desc') || 'description';
+      const imgCol = getSetting('redis_mapping_product_image') || 'image_url';
+      const stockCol = getSetting('redis_mapping_product_stock') || 'stock';
+
+      for (const key of keys) {
+        const type = await redis.type(key);
+        let data: any = {};
+        
+        try {
+          if (type === 'string') {
+            const str = await redis.get(key);
+            if (str) data = JSON.parse(str);
+          } else if (type === 'hash') {
+            data = await redis.hgetall(key);
+          }
+          
+          if (!data || Object.keys(data).length === 0) continue;
+
+          const name = data[nameCol];
+          const priceStr = data[priceCol];
+          const price = typeof priceStr === 'string' ? parseFloat(priceStr.replace(',', '.')) : (priceStr || 0);
+          const desc = data[descCol] || '';
+          const img = data[imgCol] || '';
+          const stock = typeof data[stockCol] !== 'undefined' ? parseInt(data[stockCol]) : 10;
+
+          if (name && !isNaN(price)) {
+            const existing = db.prepare('SELECT id FROM products WHERE name = ?').get(name);
+            if (existing) {
+              db.prepare('UPDATE products SET price = ?, description = ?, image_url = ?, stock = ? WHERE id = ?')
+                .run(price, desc, img, stock, (existing as any).id);
+            } else {
+              db.prepare(`INSERT INTO products (category_id, name, description, price, image_url, stock) VALUES (1, ?, ?, ?, ?, ?)`).run(name, desc, price, img, stock);
+            }
+            productsImported++;
+          }
+        } catch (e) {
+          console.error(`Failed to import redis key ${key}`, e);
+        }
+      }
+    }
+
+    // Import Users
+    const usersPattern = getSetting('redis_users_pattern');
+    let usersImported = 0;
+    
+    if (usersPattern) {
+      const keys = await redis.keys(usersPattern);
+      const tgIdCol = getSetting('redis_mapping_user_tgid') || 'telegram_id';
+      const usernameCol = getSetting('redis_mapping_user_name') || 'username';
+
+      for (const key of keys) {
+        const type = await redis.type(key);
+        let data: any = {};
+        
+        try {
+          if (type === 'string') {
+            const str = await redis.get(key);
+            if (str) data = JSON.parse(str);
+          } else if (type === 'hash') {
+            data = await redis.hgetall(key);
+          }
+          
+          if (!data) continue;
+
+          const tgId = parseInt(data[tgIdCol]);
+          const username = data[usernameCol] || '';
+
+          if (!isNaN(tgId)) {
+            const existing = db.prepare('SELECT id FROM users WHERE telegram_id = ?').get(tgId);
+            if (existing) {
+              db.prepare('UPDATE users SET username = ? WHERE telegram_id = ?').run(username, tgId);
+            } else {
+              db.prepare(`INSERT INTO users (telegram_id, username) VALUES (?, ?)`).run(tgId, username);
+            }
+            usersImported++;
+          }
+        } catch (e) {
+          console.error(`Failed to import redis key ${key}`, e);
+        }
+      }
+    }
+    
+    await redis.quit();
+    res.json({ success: true, message: `Импорт завершен. Товаров: ${productsImported}, Пользователей: ${usersImported}` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Ошибка импорта из Redis' });
+  }
 });
 
 // Checkout
