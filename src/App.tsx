@@ -33,7 +33,9 @@ import {
   CheckCircle2,
   Clock,
   Send,
-  Heart
+  Heart,
+  Upload,
+  Edit3
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
@@ -436,39 +438,45 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isFavorite, onAddToC
       viewport={{ once: true }}
       className="glass rounded-[35px] overflow-hidden group border border-[var(--color-glass-border)] hover:border-[var(--color-portal-green)]/50 transition-all p-4 relative flex flex-col h-full hover:shadow-[0_0_50px_rgba(68,255,0,0.1)]"
     >
-      <div className="absolute top-6 left-6 z-10">
-        <motion.button
-          whileHover={{ scale: 1.2 }}
-          whileTap={{ scale: 0.8 }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite(product.id);
-          }}
-          className={cn(
-            "p-2.5 rounded-2xl transition-all shadow-lg backdrop-blur-xl border",
-            isFavorite 
-              ? "bg-red-500 border-red-400 text-white" 
-              : "bg-black/40 border-white/10 text-white/40 hover:text-white"
-          )}
-        >
-          <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
-        </motion.button>
-      </div>
-
-      {product.is_sale && (
-        <motion.div 
-          animate={{ rotate: [-5, 5, -5] }}
-          transition={{ repeat: Infinity, duration: 4 }}
-          className="absolute top-6 right-6 bg-red-600 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest z-10 shadow-lg shadow-red-600/30"
-        >
-          SALE
-        </motion.div>
-      )}
-      
       <div 
         onClick={() => onViewDetails(product)}
         className="aspect-[4/3] relative overflow-hidden bg-zinc-900 rounded-[28px] mb-6 flex items-center justify-center text-5xl cursor-pointer"
       >
+        <div className="absolute top-3 left-3 z-20">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(product.id);
+            }}
+            className={cn(
+              "p-2.5 rounded-2xl transition-all shadow-lg backdrop-blur-xl border",
+              isFavorite 
+                ? "bg-red-500 border-red-400 text-white" 
+                : "bg-black/60 border-white/10 text-white/50 hover:text-white"
+            )}
+          >
+            <Heart size={16} fill={isFavorite ? "currentColor" : "none"} />
+          </motion.button>
+        </div>
+
+        {!!product.is_sale && (
+          <motion.div 
+            animate={{ rotate: [-5, 5, -5] }}
+            transition={{ repeat: Infinity, duration: 4 }}
+            className="absolute top-4 right-4 bg-red-600 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest z-20 shadow-lg shadow-red-600/30"
+          >
+            SALE
+          </motion.div>
+        )}
+        
+        {!!product.is_used && (
+          <div className="absolute bottom-4 left-4 bg-yellow-500/90 text-black text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest z-20 shadow-lg backdrop-blur-sm">
+            Б/У
+          </div>
+        )}
+
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-10 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center pb-8 p-4">
           <div className="text-[10px] font-black tracking-widest bg-white text-black px-6 py-3 rounded-2xl scale-0 group-hover:scale-100 transition-transform uppercase">Просмотр</div>
         </div>
@@ -519,7 +527,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isFavorite, onAddToC
   );
 };
 
-const ProductModal = ({ product, onClose, onAddToCart }: { product: Product, onClose: () => void, onAddToCart: (p: Product) => void }) => {
+const ProductModal = ({ product, onClose, onAddToCart, isFavorite, onToggleFavorite }: { 
+  product: Product; 
+  onClose: () => void; 
+  onAddToCart: (p: Product) => void;
+  isFavorite: boolean;
+  onToggleFavorite: (id: number) => void;
+}) => {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4">
       <motion.div 
@@ -550,8 +564,43 @@ const ProductModal = ({ product, onClose, onAddToCart }: { product: Product, onC
             initial={{ x: -20, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ delay: 0.2 }}
-            className="aspect-square bg-black/40 flex items-center justify-center text-8xl"
+            className="aspect-square bg-black/40 flex items-center justify-center text-8xl relative overflow-hidden"
           >
+            <div className="absolute top-6 left-6 z-20">
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFavorite(product.id);
+                }}
+                className={cn(
+                  "p-3 rounded-2xl transition-all shadow-lg backdrop-blur-xl border",
+                  isFavorite 
+                    ? "bg-red-500 border-red-400 text-white" 
+                    : "bg-black/60 border-white/10 text-white/50 hover:text-white"
+                )}
+              >
+                <Heart size={20} fill={isFavorite ? "currentColor" : "none"} />
+              </motion.button>
+            </div>
+
+            {!!product.is_sale && (
+              <motion.div 
+                animate={{ rotate: [-5, 5, -5] }}
+                transition={{ repeat: Infinity, duration: 4 }}
+                className="absolute top-6 right-6 bg-red-600 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-widest z-20 shadow-lg shadow-red-600/30"
+              >
+                SALE
+              </motion.div>
+            )}
+
+            {!!product.is_used && (
+              <div className="absolute bottom-6 left-6 bg-yellow-500/90 text-black text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-widest z-20 shadow-lg backdrop-blur-sm">
+                Б/У
+              </div>
+            )}
+
             {product.image_url ? (
               <motion.img 
                 layoutId={`product-image-${product.id}`}
@@ -1072,7 +1121,7 @@ const ProfilePage = ({ user, onLogout, tonEnabled }: { user: User | null, onLogo
       navigate('/login');
       return;
     }
-    fetch('/api/orders/my').then(res => res.json()).then(setOrders);
+    fetch('/api/orders/my').then(res => res.json()).then(data => setOrders(Array.isArray(data) ? data : []));
   }, [user]);
 
   if (!user) return null;
@@ -1571,6 +1620,7 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
   const [flavorFilter, setFlavorFilter] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
     name: '',
     description: '',
@@ -1618,37 +1668,69 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
     });
   };
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const openEditModal = (product: Product) => {
+    setEditingProductId(product.id);
+    setNewProduct(product);
+    setShowCreateModal(true);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.url) {
+        setNewProduct(prev => ({ ...prev, image_url: data.url }));
+      } else {
+        alert('Ошибка при загрузке: ' + data.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Ошибка при загрузке изображения');
+    }
+  };
+
+  const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    fetch('/api/admin/products', {
-      method: 'POST',
+    const url = editingProductId ? `/api/admin/products/${editingProductId}` : '/api/admin/products';
+    const method = editingProductId ? 'PUT' : 'POST';
+
+    fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newProduct)
     })
     .then(res => res.json())
     .then(data => {
-      if (data.id) {
-        const category = categories.find(c => c.id === Number(newProduct.category_id));
-        const createdProduct: Product = {
-          ...newProduct as Product,
-          id: data.id,
-          category_name: category?.name || ''
-        };
-        setProducts([createdProduct, ...products]);
-        setShowCreateModal(false);
-        setNewProduct({
-          name: '',
-          description: '',
-          category_id: 1,
-          image_url: '',
-          nicotine: '',
-          volume: '',
-          flavor: '',
-          is_sale: false,
-          is_used: false
-        });
+      const category = categories.find(c => c.id === Number(newProduct.category_id));
+      const savedProduct: Product = {
+        ...newProduct as Product,
+        id: editingProductId || data.id,
+        category_name: category?.name || ''
+      };
+      
+      if (editingProductId) {
+        setProducts(products.map(p => p.id === editingProductId ? savedProduct : p));
+        alert('Изменения сохранены!');
+      } else {
+        setProducts([savedProduct, ...products]);
         alert('Товар успешно добавлен!');
       }
+      
+      setShowCreateModal(false);
+      setEditingProductId(null);
+      setNewProduct({
+        name: '', description: '', category_id: 1, image_url: '',
+        nicotine: '', volume: '', flavor: '', is_sale: false, is_used: false
+      });
     });
   };
 
@@ -1666,10 +1748,10 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
       return;
     }
     fetch('/api/admin/stats').then(res => res.json()).then(setStats);
-    fetch('/api/admin/orders').then(res => res.json()).then(setOrders);
-    fetch('/api/products').then(res => res.json()).then(setProducts);
-    fetch('/api/categories').then(res => res.json()).then(setCategories);
-    fetch('/api/admin/users').then(res => res.json()).then(setUsers);
+    fetch('/api/admin/orders').then(res => res.json()).then(data => setOrders(Array.isArray(data) ? data : []));
+    fetch('/api/products').then(res => res.json()).then(data => setProducts(Array.isArray(data) ? data : []));
+    fetch('/api/categories').then(res => res.json()).then(data => setCategories(Array.isArray(data) ? data : []));
+    fetch('/api/admin/users').then(res => res.json()).then(data => setUsers(Array.isArray(data) ? data : []));
     fetch('/api/admin/settings').then(res => res.json()).then(setSettings);
   }, [user]);
 
@@ -1843,7 +1925,14 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                 <motion.button 
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowCreateModal(true)}
+                  onClick={() => {
+                    setEditingProductId(null);
+                    setNewProduct({
+                      name: '', description: '', category_id: 1, image_url: '',
+                      nicotine: '', volume: '', flavor: '', is_sale: false, is_used: false
+                    });
+                    setShowCreateModal(true);
+                  }}
                   className="flex items-center gap-2 bg-[var(--color-portal-green)] text-black px-8 py-5 rounded-2xl font-black hover:bg-[var(--color-acid-green)] transition-all uppercase tracking-widest text-xs w-full lg:w-auto shadow-xl shadow-[var(--color-portal-green)]/20"
                 >
                   <Plus size={22} /> Добавить товар
@@ -1868,12 +1957,12 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
 
                       <div className="space-y-1">
                         <h2 className="text-3xl font-black uppercase tracking-tighter italic">
-                          НОВЫЙ <span className="text-[var(--color-portal-green)]">ТОВАР</span>
+                          {editingProductId ? 'РЕДАКТОР' : 'НОВЫЙ'} <span className="text-[var(--color-portal-green)]">ТОВАР</span>
                         </h2>
                         <div className="h-1 w-12 bg-[var(--color-portal-green)] rounded-full" />
                       </div>
 
-                      <form onSubmit={handleCreateProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <form onSubmit={handleSaveProduct} className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="md:col-span-2 space-y-1">
                           <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Название</label>
                           <input 
@@ -1980,16 +2069,19 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                         </div>
 
                         <div className="md:col-span-2 space-y-1">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Картинка (URL)</label>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-white/20 px-1">Картинка</label>
                           <div className="flex gap-3">
-                            <input 
-                              type="url" 
-                              value={newProduct.image_url}
-                              onChange={(e) => setNewProduct({...newProduct, image_url: e.target.value})}
-                              className="flex-1 bg-white/5 border border-white/10 rounded-xl py-3 px-4 text-xs focus:outline-none focus:border-[var(--color-portal-green)] transition-all"
-                              placeholder="https://..."
-                            />
-                            <div className="w-12 h-12 rounded-xl border border-white/10 bg-black/40 overflow-hidden flex items-center justify-center">
+                            <label className="flex-1 bg-white/5 border border-white/10 hover:border-[var(--color-portal-green)] transition-all rounded-xl py-3 px-4 flex items-center justify-center gap-3 cursor-pointer group">
+                              <Upload size={16} className="text-[var(--color-portal-green)] group-hover:-translate-y-1 transition-transform" />
+                              <span className="text-xs font-bold text-white/50 group-hover:text-white transition-colors">Загрузить файл</span>
+                              <input 
+                                type="file" 
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                              />
+                            </label>
+                            <div className="w-12 h-12 rounded-xl border border-white/10 bg-black/40 overflow-hidden flex items-center justify-center shrink-0">
                               {newProduct.image_url ? (
                                 <img src={newProduct.image_url} alt="Preview" className="w-full h-full object-cover" />
                               ) : (
@@ -2032,7 +2124,7 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                             type="submit"
                             className="w-full py-4 bg-[var(--color-portal-green)] text-black font-black text-lg rounded-2xl hover:bg-[var(--color-acid-green)] transition-all uppercase tracking-widest"
                           >
-                            ДОБАВИТЬ ТОВАР
+                            {editingProductId ? 'СОХРАНИТЬ ИЗМЕНЕНИЯ' : 'ДОБАВИТЬ ТОВАР'}
                           </button>
                         </div>
                       </form>
@@ -2094,9 +2186,17 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                           </div>
                         </div>
                       </div>
-                      <button className="p-3 text-white/20 hover:text-red-500 transition-colors">
-                        <Trash2 size={24} />
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={() => openEditModal(p)}
+                          className="p-3 text-white/20 hover:text-[var(--color-portal-green)] transition-colors"
+                        >
+                          <Edit3 size={20} />
+                        </button>
+                        <button className="p-3 text-white/20 hover:text-red-500 transition-colors">
+                          <Trash2 size={20} />
+                        </button>
+                      </div>
                     </motion.div>
                   ))}
                 </AnimatePresence>
@@ -2206,7 +2306,7 @@ const AdminDashboard = ({ user }: { user: User | null }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {users.map(u => (
+                        {Array.isArray(users) && users.map(u => (
                           <tr key={u.id} className="hover:bg-white/5 transition-colors group">
                             <td className="px-8 py-6 text-sm font-bold uppercase">{u.first_name} <span className="text-[10px] opacity-30 lowercase italic ml-2">@{u.username}</span></td>
                             <td className="px-8 py-6 font-mono font-bold">{u.total_orders || 0}</td>
@@ -2471,6 +2571,8 @@ export default function App() {
                 product={selectedProduct} 
                 onClose={() => setSelectedProduct(null)} 
                 onAddToCart={addToCart} 
+                isFavorite={favoriteIds.includes(selectedProduct.id)}
+                onToggleFavorite={toggleFavorite}
               />
             )}
           </AnimatePresence>

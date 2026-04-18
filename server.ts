@@ -7,10 +7,30 @@ import jwt from 'jsonwebtoken';
 import cookieParser from 'cookie-parser';
 import crypto from 'crypto';
 import axios from 'axios';
+import multer from 'multer';
+import fs from 'fs';
 import 'dotenv/config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const db = new Database('shop.db');
+const dataDir = process.env.DATA_DIR || __dirname;
+
+const db = new Database(path.join(dataDir, 'shop.db'));
+
+const uploadDir = path.join(dataDir, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
 
 // Initialize Database
 db.exec(`
@@ -334,13 +354,32 @@ app.get('/api/orders/my', authenticate, (req: any, res) => {
 });
 
 // Admin Routes
+app.post('/api/admin/upload', authenticate, isAdmin, upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  const imageUrl = `/uploads/${req.file.filename}`;
+  res.json({ url: imageUrl });
+});
+
 app.post('/api/admin/products', authenticate, isAdmin, (req, res) => {
   const { category_id, name, description, price, image_url, stock, nicotine, volume, flavor, is_sale, is_used } = req.body;
   const result = db.prepare(`
     INSERT INTO products (category_id, name, description, price, image_url, stock, nicotine, volume, flavor, is_sale, is_used)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(category_id, name, description, price, image_url, stock, nicotine, volume, flavor, is_sale, is_used);
+  `).run(category_id, name, description, price, image_url, stock, nicotine, volume, flavor, is_sale ? 1 : 0, is_used ? 1 : 0);
   res.json({ id: result.lastInsertRowid });
+});
+
+app.put('/api/admin/products/:id', authenticate, isAdmin, (req, res) => {
+  const { category_id, name, description, price, image_url, stock, nicotine, volume, flavor, is_sale, is_used } = req.body;
+  db.prepare(`
+    UPDATE products SET 
+      category_id = ?, name = ?, description = ?, price = ?, image_url = ?, 
+      stock = ?, nicotine = ?, volume = ?, flavor = ?, is_sale = ?, is_used = ?
+    WHERE id = ?
+  `).run(category_id, name, description, price, image_url, stock, nicotine, volume, flavor, is_sale ? 1 : 0, is_used ? 1 : 0, req.params.id);
+  res.json({ success: true });
 });
 
 app.get('/api/admin/orders', authenticate, isAdmin, (req, res) => {
@@ -489,6 +528,8 @@ app.post('/api/favorites/toggle', authenticate, (req: any, res) => {
 });
 
 async function startServer() {
+  app.use('/uploads', express.static(uploadDir));
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
