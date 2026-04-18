@@ -204,7 +204,7 @@ const sendTelegramMessage = async (userId: number, text: string) => {
 
 // Auth Middleware
 const authenticate = (req: any, res: any, next: any) => {
-  const token = req.cookies.auth_token;
+  const token = req.cookies.auth_token || req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
   try {
     req.user = jwt.verify(token, getJwtSecret());
@@ -229,7 +229,7 @@ app.post('/api/auth/admin', (req, res) => {
   if (user && user.password === password) {
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, getJwtSecret());
     res.cookie('auth_token', token, { httpOnly: true, secure: true, sameSite: 'none' });
-    return res.json({ user });
+    return res.json({ user, token });
   }
   
   res.status(401).json({ error: 'Invalid credentials' });
@@ -284,7 +284,7 @@ app.post('/api/auth/telegram', (req, res) => {
   const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, getJwtSecret());
 
   res.cookie('auth_token', token, { httpOnly: true, secure: true, sameSite: 'none' });
-  res.json({ user });
+  res.json({ user, token });
 });
 
 app.post('/api/auth/webapp', (req, res) => {
@@ -335,7 +335,7 @@ app.post('/api/auth/webapp', (req, res) => {
 
   const token = jwt.sign({ id: user.id, telegram_id: user.telegram_id, role: user.role }, getJwtSecret());
   res.cookie('auth_token', token, { httpOnly: true, secure: true, sameSite: 'none' });
-  res.json({ user });
+  res.json({ user, token });
 });
 
 app.get('/api/me', (req, res) => {
@@ -353,6 +353,129 @@ app.get('/api/me', (req, res) => {
 app.post('/api/logout', (req, res) => {
   res.clearCookie('auth_token', { httpOnly: true, secure: true, sameSite: 'none' });
   res.json({ success: true });
+});
+
+// Redis Proxy Middleware
+app.use('/api', async (req, res, next) => {
+  const getSetting = (k: string) => {
+    try { return (db.prepare('SELECT value FROM settings WHERE key = ?').get(k) as any)?.value; } catch(e){ return null; }
+  };
+  const isRedisMode = getSetting('redis_mode_active') === '1';
+  if (!isRedisMode) return next();
+
+  if (req.path.includes('/admin/import/redis') || req.path.includes('/admin/settings')) return next();
+
+  try {
+    const redisUrl = getSetting('redis_url');
+    if (!redisUrl) return next();
+    
+    // Instantiate Redis safely
+    const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1 });
+
+    // Handle Fetching Products
+    if (req.path.endsWith('/products') && req.method === 'GET') {
+      const pattern = getSetting('redis_products_pattern') || 'products:*';
+      const keys = await redis.keys(pattern);
+      const nameCol = getSetting('redis_mapping_product_name') || 'name';
+      const priceCol = getSetting('redis_mapping_product_price') || 'price';
+      const descCol = getSetting('redis_mapping_product_desc') || 'description';
+      const imgCol = getSetting('redis_mapping_product_image') || 'image_url';
+      const stockCol = getSetting('redis_mapping_product_stock') || 'stock';
+
+      const products = [];
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        let data: any = {};
+        const type = await redis.type(key);
+        if (type === 'string') {
+          const str = await redis.get(key);
+          if (str) try { data = JSON.parse(str); } catch(e){}
+        } else if (type === 'hash') {
+          data = await redis.hgetall(key);
+        }
+        
+        const priceStr = data[priceCol];
+        const price = typeof priceStr === 'string' ? parseFloat(priceStr.replace(',', '.')) : (priceStr || 0);
+
+        if (data[nameCol] && !isNaN(price)) {
+          // Attempt to extract numeric ID from key since our interfaces expect number
+          const idMatch = key.match(/\d+/);
+          const numericId = idMatch ? parseInt(idMatch[0]) : (i + 1000);
+          
+          products.push({
+            id: numericId, 
+            _redis_key: key,
+            category_id: 1,
+            category_name: 'Redis',
+            name: data[nameCol],
+            description: data[descCol] || '',
+            price: price,
+            image_url: data[imgCol] || '',
+            stock: typeof data[stockCol] !== 'undefined' ? parseInt(data[stockCol]) : 10,
+            is_sale: 0,
+            is_used: 0
+          });
+        }
+      }
+      redis.quit();
+      return res.json(products);
+    }
+    
+    // Handle me
+    if (req.path.endsWith('/me') && req.method === 'GET') {
+      const token = req.cookies.auth_token || req.headers.authorization?.split(' ')[1];
+      if (!token) {
+        redis.quit();
+        return res.json({ user: null });
+      }
+      try {
+        const decoded = jwt.verify(token, getJwtSecret()) as any;
+        const usersPattern = getSetting('redis_users_pattern') || 'users:*';
+        const tgIdCol = getSetting('redis_mapping_user_tgid') || 'telegram_id';
+        const keys = await redis.keys(usersPattern);
+        let foundUser = null;
+
+        for (const key of keys) {
+          let data: any = {};
+          const type = await redis.type(key);
+          if (type === 'string') {
+            const str = await redis.get(key);
+            if (str) try { data = JSON.parse(str); } catch(e){}
+          } else if (type === 'hash') {
+            data = await redis.hgetall(key);
+          }
+
+          if (parseInt(data[tgIdCol]) === parseInt(decoded.telegram_id) || data.id == decoded.id) {
+             const idMatch = key.match(/\d+/);
+             const numericId = idMatch ? parseInt(idMatch[0]) : 1000;
+             foundUser = {
+               id: numericId,
+               telegram_id: data[tgIdCol],
+               username: data[getSetting('redis_mapping_user_name') || 'username'] || '',
+               role: decoded.role || 'user',
+               _redis_key: key
+             };
+             break;
+          }
+        }
+        
+        redis.quit();
+        if (foundUser) return res.json({ user: foundUser });
+        // fallback
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.id);
+        return res.json({ user });
+      } catch (err) {
+         redis.quit();
+         return res.json({ user: null });
+      }
+    }
+
+    // Default: pass to SQLite
+    redis.quit();
+    next();
+  } catch(e) {
+    next();
+  }
 });
 
 app.get('/api/products', (req, res) => {
@@ -622,7 +745,7 @@ app.post('/api/orders', authenticate, async (req: any, res) => {
         const auth = Buffer.from(`${shopId.value}:${apiKey.value}`).toString('base64');
         const paymentRes = await axios.post('https://api.yookassa.ru/v3/payments', {
           amount: {
-            value: Number(total_price).toFixed(2),
+            value: "50.00",
             currency: "RUB"
           },
           confirmation: {
@@ -630,7 +753,7 @@ app.post('/api/orders', authenticate, async (req: any, res) => {
             return_url: `${getAppUrl()}/profile?success=true&order_id=${orderId}`
           },
           capture: true,
-          description: `Оплата заказа #${orderId}`,
+          description: `Гарантийный платеж за заказ #${orderId}`,
           metadata: {
             order_id: orderId
           }

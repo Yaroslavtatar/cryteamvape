@@ -43,6 +43,43 @@ import {
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
+// --- Custom Auth Fetch ---
+const apiFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const isRequestObj = input instanceof Request;
+  let url = isRequestObj ? (input as Request).url : String(input);
+  let options = init || {};
+
+  if (url.includes('/api/')) {
+    options.credentials = 'include';
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+      };
+    }
+  }
+
+  const response = await window.fetch(isRequestObj ? input : url, options);
+
+  if (url.includes('/api/auth/') && response.ok) {
+    const clone = response.clone();
+    try {
+      const data = await clone.json();
+      if (data.token) {
+        localStorage.setItem('auth_token', data.token);
+      }
+    } catch(e) {}
+  }
+
+  if (url.includes('/api/logout') && response.ok) {
+    localStorage.removeItem('auth_token');
+  }
+
+  return response;
+};
+const fetch = apiFetch;
+
 // --- Types ---
 interface Product {
   id: number;
@@ -160,6 +197,7 @@ interface AppSettings {
   telegram_oauth_id?: string;
   telegram_oauth_auth_url?: string;
   redis_url?: string;
+  redis_mode_active?: string;
   redis_products_pattern?: string;
   redis_users_pattern?: string;
   redis_mapping_product_name?: string;
@@ -2515,9 +2553,30 @@ const AdminDashboard = ({ user, onLogout }: { user: User | null, onLogout: () =>
                 </div>
 
                 <div className="space-y-8 border-t border-white/5 pt-12">
-                  <h3 className="text-lg font-black uppercase tracking-widest text-red-500 flex items-center gap-3">
-                    <Database size={22} /> ИМПОРТ ИЗ REDIS
-                  </h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-black uppercase tracking-widest text-red-500 flex items-center gap-3">
+                      <Database size={22} /> ИНТЕГРАЦИЯ С REDIS
+                    </h3>
+                    <button 
+                      onClick={() => setSettings({ ...settings, redis_mode_active: settings.redis_mode_active === '1' ? '0' : '1' })}
+                      className={cn(
+                        "relative w-16 h-8 rounded-full transition-colors duration-500 shadow-inner",
+                        settings.redis_mode_active === '1' ? "bg-red-500" : "bg-white/10"
+                      )}
+                    >
+                      <motion.div 
+                        animate={{ x: settings.redis_mode_active === '1' ? 32 : 0 }}
+                        className="absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md"
+                      />
+                    </button>
+                  </div>
+                  
+                  {settings.redis_mode_active === '1' && (
+                    <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                      <strong>ВНИМАНИЕ:</strong> Включен режим реального времени с Redis. Каталог товаров и пользователи теперь читаются напрямую из вашей Redis базы данных по указанным паттернам.
+                    </div>
+                  )}
+
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <label className="text-[10px] text-white/30 uppercase font-black tracking-widest ml-1">Redis URL</label>
